@@ -143,81 +143,101 @@ describe('Offline', () => {
     });
   });
 
-  context('lambda integration, handling response templates', () => {
-    it('should use event defined response template and headers', (done) => {
-      const offLine = new OffLineBuilder().addFunctionConfig('index', {
-        handler: 'users.index',
-        events: [{
-          http: {
-            path: 'index',
-            method: 'GET',
-            integration: 'lambda',
-            response: {
-              headers: {
-                'Content-Type': "'text/html'",
+  context('using lambda integration', () => {
+    context('handling response templates', () => {
+      context('successful callback', () => {
+        it('should use event defined response template and headers', (done) => {
+          const offLine = new OffLineBuilder().addFunctionConfig('index', {
+            handler: 'users.index',
+            events: [{
+              http: {
+                path: 'index',
+                method: 'GET',
+                integration: 'lambda',
+                response: {
+                  headers: {
+                    'Content-Type': "'text/html'",
+                  },
+                  template: "$input.path('$')",
+                },
               },
-              template: "$input.path('$')",
-            },
-          },
-        }],
-      }, (event, context, cb) => cb(null, 'Hello World')).toObject();
+            }],
+          }, (event, context, cb) => cb(null, 'Hello World')).toObject();
 
-      offLine.inject('/index', (res) => {
-        expect(res.headers['content-type']).to.contains('text/html');
-        expect(res.statusCode).to.eq('200');
-        done();
+          offLine.inject('/index', (res) => {
+            expect(res.headers['content-type']).to.contains('text/html');
+            expect(res.statusCode).to.eq('200');
+            done();
+          });
+        });
       });
-    });
-  });
 
-  context('lambda integration, parse [xxx] as status codes in errors', () => {
-    it('should set the status code to 500 when no [xxx] is present', (done) => {
-      const offLine = new OffLineBuilder().addFunctionConfig('index', {
-        handler: 'users.index',
-        events: [{
-          http: {
-            path: 'index',
-            method: 'GET',
-            integration: 'lambda',
-            response: {
-              headers: {
-                'Content-Type': "'text/html'",
-              },
-              template: "$input.path('$')",
-            },
-          },
-        }],
-      }, (event, context, cb) => cb(new Error('Internal Server Error'))).toObject();
+      context('error callback', () => {
+        context('when no [xxx] status code is present', () => {
+          it('should set the status code to 500', (done) => {
+            const offLine = new OffLineBuilder().addFunctionConfig('index', {
+              handler: 'users.index',
+              events: [{
+                http: {
+                  path: 'index',
+                  method: 'GET',
+                  integration: 'lambda',
+                },
+              }],
+            }, (event, context, cb) => cb(new Error('Internal Server Error'))).toObject();
 
-      offLine.inject('/index', (res) => {
-        expect(res.headers['content-type']).to.contains('text/html');
-        expect(res.statusCode).to.eq('500');
-        done();
-      });
-    });
+            offLine.inject('/index', (res) => {
+              expect(res.headers['content-type']).to.contains('application/json');
+              expect(res.statusCode).to.eq('500');
+              done();
+            });
+          });
+        });
 
-    it('should set the status code to 401 when [401] is the prefix of the error message', (done) => {
-      const offLine = new OffLineBuilder().addFunctionConfig('index', {
-        handler: 'users.index',
-        events: [{
-          http: {
-            path: 'index',
-            method: 'GET',
-            integration: 'lambda',
-            response: {
-              headers: {
-                'Content-Type': "'text/html'",
-              },
-              template: "$input.path('$')",
-            },
-          },
-        }],
-      }, (event, context, cb) => cb(new Error('[401] Unauthorized'))).toObject();
+        context('when [xxx] status code is present', () => {
+          context('in an error', () => {
+            let offLine;
 
-      offLine.inject('/index', (res) => {
-        expect(res.headers['content-type']).to.contains('text/html');
-        expect(res.statusCode).to.eq('401');
-        done();
+            before((done) => {
+              offLine = new OffLineBuilder().addFunctionConfig('index', {
+                handler: 'users.index',
+                events: [{
+                  http: {
+                    path: 'index',
+                    method: 'GET',
+                    integration: 'lambda',
+                  },
+                }],
+              }, (event, context, cb) => cb(new Error('[401] Unauthorized'))).toObject();
+              done();
+            });
+
+            it('should set the status code to [xxx]', (done) => {
+              offLine.inject('/index', (res) => {
+                expect(res.headers['content-type']).to.contains('application/json');
+                done();
+              });
+            });
+
+            it('should have the application/json content type header', (done) => {
+              offLine.inject('/index', (res) => {
+                expect(res.headers['content-type']).to.contains('application/json');
+                done();
+              });
+            });
+
+            it('should have the error body', (done) => {
+              offLine.inject('/index', (res) => {
+                const jsonPayload = JSON.parse(res.payload);
+                expect(jsonPayload.errorMessage).to.eq('[401] Unauthorized');
+                expect(jsonPayload.errorType).to.eq('Error');
+                expect(jsonPayload.stackTrace).to.not.be.undefined();
+                done();
+              });
+            });
+
+          });
+        });
       });
     });
   });

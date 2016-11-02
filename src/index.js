@@ -493,12 +493,16 @@ class Offline {
                   errorStatusCode = '500';
                 }
 
-                // Mocks Lambda errors
                 result = {
                   errorMessage,
-                  errorType: err.constructor.name,
-                  stackTrace: this._getArrayStackTrace(err.stack),
                 };
+
+                if (err instanceof Error) {
+                  Object.assign(result, {
+                    errorType: err.constructor.name,
+                    stackTrace: this._getArrayStackTrace(err.stack),
+                  });
+                }
 
                 this.serverlessLog(`Failure: ${errorMessage}`);
                 if (result.stackTrace) console.log(result.stackTrace.join('\n  '));
